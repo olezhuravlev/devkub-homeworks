@@ -50,17 +50,12 @@ app.post('/v1/upload', (request, response) => {
         var buf = Buffer.concat(bufs);
 
         const fileType = await FileType.fromBuffer(buf);
-        console.log(`Detected file type: ${fileType.mime}`);
-
         if(!fileType) {
             console.warn(`Failed to detect file mime type`);
             return response.status(400).json({ 'error': 'Failed to detect file mime type' });
         }
 
-        if(!fileType.mime.startsWith('image/')) {
-            console.warn(`Expected image, but got ${fileType.mime}`);
-            return response.status(400).json({ 'error': 'File expected to be image' });
-        }
+        console.log(`Detected file type: ${fileType.mime}`);
 
         const id = uuidv4();
         const filename =  `${id}.${fileType.ext}`;
