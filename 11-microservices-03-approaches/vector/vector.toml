@@ -1,0 +1,29 @@
+[sources.my_docker_logs_source]
+type = "docker_logs"
+docker_host = "unix:///var/run/docker.sock"
+include_containers = ["storage", "uploader", "security", "gateway"]
+exclude_containers = ["vector", "elastic"]
+host_key = "Vector_Container_ID"
+
+[sinks.console]
+inputs = ["my_docker_logs_source"]
+target = "stdout"
+type = "console"
+encoding.codec = "json"
+
+[transforms.transform_json]
+type = "remove_fields"
+inputs = ["my_docker_logs_source"]
+fields = ["container_created_at", "container_id", "image", "label"]
+
+[sinks.elasticsearch]
+type = "elasticsearch"
+inputs = ["transform_json"]
+endpoint = "http://elastic:9200"
+compression = "none"
+bulk.index = "vector-%Y-%m-%d"
+
+[sinks.elasticsearch.auth]
+strategy = "basic"
+user = "elastic"
+password = "elastic"

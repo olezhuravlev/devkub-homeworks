@@ -1,0 +1,183 @@
+volumes:
+  data:
+  prometheus-data:
+  grafana_data:
+  elastic_data:
+    driver: local
+
+networks:
+  elastic:
+    driver: bridge
+
+services:
+  storage:
+    image: minio/minio:latest
+    container_name: storage
+    command: server /data
+    restart: always
+    expose:
+      - 9000
+    environment:
+      MINIO_ROOT_USER: ${Storage_AccessKey:-STORAGE_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${Storage_Secret:-STORAGE_SECRET_KEY}
+      MINIO_PROMETHEUS_AUTH_TYPE: public
+    volumes:
+      - data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
+  createbuckets:
+    image: minio/mc
+    container_name: minio-bucket
+    depends_on:
+      - storage
+    restart: on-failure
+    entrypoint: >
+      /bin/sh -c "
+      /usr/bin/mc config host add storage http://storage:9000 ${Storage_AccessKey-STORAGE_ACCESS_KEY} ${Storage_Secret-STORAGE_SECRET_KEY} &&
+      /usr/bin/mc mb --ignore-existing storage/${Storage_Bucket:-data} &&
+      /usr/bin/mc policy set download storage/${Storage_Bucket:-data} &&
+      exit 0;
+      "
+
+  uploader:
+    build: ./uploader
+    container_name: uploader
+    depends_on:
+      - storage
+      - createbuckets
+    expose:
+      - 3000
+    environment:
+      PORT: 3000
+      S3_HOST: storage
+      S3_PORT: 9000
+      S3_ACCESS_KEY: ${Storage_AccessKey:-STORAGE_ACCESS_KEY}
+      S3_ACCESS_SECRET: ${Storage_Secret:-STORAGE_SECRET_KEY}
+      S3_BUCKET: ${Storage_Bucket:-STORAGE_BUCKET}
+  
+  security:
+    build: ./security
+    container_name: security
+    expose: 
+      - 3000
+    environment:
+      PORT: 3000
+
+  gateway:
+    image: nginx:alpine
+    container_name: gateway
+    volumes:
+      - ./gateway/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./gateway/api_gateway.conf:/etc/nginx/api_gateway.conf:ro
+      - ./gateway/api_backends.conf:/etc/nginx/api_backends.conf:ro
+      - ./gateway/api_json_errors.conf:/etc/nginx/api_json_errors.conf:ro
+      - ./gateway/html/:/etc/nginx/html/:ro
+      - ./gateway/ssl/:/etc/ssl/:ro
+      - ./gateway/api_conf.d/:/etc/nginx/api_conf.d/:ro
+    ports:
+      - "443:443"
+    depends_on:
+      - storage
+      - uploader
+      - security
+
+  elastic:
+    image: elasticsearch:7.17.5
+    container_name: elastic
+    environment:
+      - node.name=elastic
+      - cluster.name=es-docker-cluster
+      - cluster.initial_master_nodes=elastic
+      - bootstrap.memory_lock=true
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - "ELASTIC_PASSWORD=elastic"
+    ports:
+      - 9200:9200
+    volumes:
+      - ./elasticsearch/config.yml:/usr/share/elasticsearch/config/elasticsearch.yml:Z
+      - elastic_data:/usr/share/elasticsearch/data:Z
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    networks:
+      - elastic
+
+  vector:
+    image: timberio/vector:0.23.3-debian
+    container_name: vector
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./vector/vector.toml:/etc/vector/vector.toml:ro
+    ports:
+      - "8686:8686"
+    networks:
+      - elastic
+    depends_on:
+      - storage
+      - uploader
+      - security
+      - gateway
+      - elastic
+
+  kibana:
+    image: kibana:7.17.5
+    container_name: kibana
+    volumes:
+      - ./kibana/config.yml:/usr/share/kibana/config/kibana.yml:Z
+    ports:
+      - 5601:5601
+    networks:
+      - elastic
+    depends_on:
+      - elastic
+
+  prometheus:
+    image: prom/prometheus:v2.24.1
+    container_name: prometheus
+    volumes:
+      - ./prometheus:/etc/prometheus:Z
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    restart: unless-stopped
+    expose:
+      - 9090
+    networks:
+      - elastic
+    depends_on:
+      - security
+      - uploader
+      - storage
+
+  grafana:
+    image: grafana/grafana:7.4.0
+    container_name: grafana
+    volumes:
+      - grafana_data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=qwerty123456
+      - GF_USERS_ALLOW_SIGN_UP=false
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+    ports:
+      - 3000:3000
+    expose:
+      - 3000
+    networks:
+      - elastic
+    depends_on:
+      - prometheus
