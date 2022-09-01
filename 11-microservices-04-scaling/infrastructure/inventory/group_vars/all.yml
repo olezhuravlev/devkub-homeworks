@@ -1,0 +1,15 @@
+---
+vm01_ip: 51.250.95.77
+vm02_ip: 62.84.115.180
+vm03_ip: 51.250.89.68
+
+redis_config_dest: /tmp
+
+port: 6379
+cluster_port: 16379
+port_replica: 6380
+cluster_port_replica: 16389
+
+bind: "* -::*"
+protected_mode: "no"
+cluster_enabled: "yes"

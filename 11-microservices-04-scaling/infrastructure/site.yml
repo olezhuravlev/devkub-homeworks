@@ -1,0 +1,50 @@
+---
+- name: Setup Redis Cluster
+  hosts: redis_cluster_nodes
+  tasks:
+  - name: Updating repositories cache and install "Pip" (Python3) package
+    become: true
+    ansible.builtin.apt:
+      name: python3-pip
+      update_cache: yes
+
+  - name: Installing module "Docker" (for Ansible to work with Docker)
+    become: true
+    ansible.builtin.pip:
+      name: docker
+
+  - name: Copying Redis config for master
+    ansible.builtin.template:
+      mode: 0644
+      src: templates/redis-master.conf.j2
+      dest: "{{ redis_config_dest }}/redis-master.conf"
+
+  - name: Copying Redis config for replica
+    ansible.builtin.template:
+      mode: 0644
+      src: templates/redis-replica.conf.j2
+      dest: "{{ redis_config_dest }}/redis-replica.conf"
+
+  - name: Restarting Redis master container
+    become: true
+    community.docker.docker_container:
+      name: redis-master
+      image: redis:7.0.4
+      command: redis-server /usr/local/etc/redis/redis.conf
+      state: started
+      restart: yes
+      network_mode: host # To make Docker compatible with Redis Cluster.
+      volumes:
+       - "{{ redis_config_dest }}/redis-master.conf:/usr/local/etc/redis/redis.conf:ro"
+
+  - name: Restarting Redis replica container
+    become: true
+    community.docker.docker_container:
+      name: redis-replica
+      image: redis:7.0.4
+      command: redis-server /usr/local/etc/redis/redis.conf
+      state: started
+      restart: yes
+      network_mode: host # To make Docker compatible with Redis Cluster.
+      volumes:
+       - "{{ redis_config_dest }}/redis-replica.conf:/usr/local/etc/redis/redis.conf:ro"
