@@ -1,0 +1,80 @@
+---
+- name: Setup Minikube infrastructure
+  hosts: k8s_cluster
+  tasks:
+  - name: Downloading "kubectl"
+    ansible.builtin.get_url:
+      url: https://storage.googleapis.com/kubernetes-release/release/v1.25.0/bin/linux/amd64/kubectl
+      dest: /run/media/oleg/Second/Downloads/kubectl
+      mode: '0755'
+
+  - name: Downloading "minikube"
+    ansible.builtin.get_url:
+      url: https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
+      dest: /run/media/oleg/Second/Downloads/minikube
+      mode: '0755'
+
+  - name: Copying file "kubectl"
+    become: true
+    ansible.builtin.copy:
+      src: /run/media/oleg/Second/Downloads/kubectl
+      dest: /usr/local/bin/kubectl
+      mode: '0755'
+      owner: oleg
+      group: oleg
+
+  - name: Copying file "minikube"
+    become: true
+    ansible.builtin.copy:
+      src: /run/media/oleg/Second/Downloads/minikube
+      dest: /usr/local/bin/minikube
+      mode: '0755'
+      owner: oleg
+      group: oleg
+
+  - name: Run minikube (--driver=docker)
+    become: false
+    ansible.builtin.command: minikube start --driver=docker
+    register: minikube_start
+  - debug:
+      msg: "{{ minikube_start.stdout.split('\n') }}"
+
+  - name: Get minikube status
+    become: false
+    ansible.builtin.command: minikube status
+    register: minikube_status
+  - debug:
+      msg: "{{ minikube_status.stdout.split('\n') }}"
+
+  - name: Creating 'hello-node' deployment
+    ansible.builtin.command: kubectl create deployment hello-node --image=k8s.gcr.io/echoserver:1.4
+    register: hello_node_create
+  - debug:
+      msg: "{{ hello_node_create.stdout.split('\n') }}"
+
+  - name: Exposing 'hello-node' deployment
+    ansible.builtin.command: kubectl expose deployment hello-node --type=LoadBalancer --port=8080
+    register: hello_node_expose
+  - debug:
+     msg: "{{ hello_node_expose.stdout.split('\n') }}"
+
+  - name: Enabling addon 'dashboard'
+    ansible.builtin.command: minikube addons enable dashboard
+    register: enable_dashboard
+  - debug:
+     msg: "{{ enable_dashboard.stdout.split('\n') }}"
+
+  - name: Enabling addon 'ingress'
+    ansible.builtin.command: minikube addons enable ingress
+    register: enable_ingress
+  - debug:
+     msg: "{{ enable_ingress.stdout.split('\n') }}"
+
+  - name: Forwarding to port 8081
+    ansible.builtin.command: kubectl port-forward services/hello-node 8081:8080
+    async: 100
+    poll: 0
+
+  - name: Checking port accessibility - http://localhost:8081
+    ansible.builtin.uri:
+      url: http://localhost:8081
