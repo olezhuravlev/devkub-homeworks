@@ -1,0 +1,244 @@
+---
+- name: Setup Kubernetes Cluster
+  hosts: k8n_cluster
+  tasks:
+    - name: Update repositories cache and install common tools
+      become: true
+      ansible.builtin.apt:
+        update_cache: yes
+        pkg:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+
+    - name: Download repository GPG-key
+      ansible.builtin.get_url:
+        url: https://packages.cloud.google.com/apt/doc/apt-key.gpg
+        dest: /home/ubuntu/apt-key.gpg
+        mode: '0755'
+
+    - name: Copy repository GPG-key
+      become: true
+      ansible.builtin.copy:
+        src: /home/ubuntu/apt-key.gpg
+        dest: /usr/share/keyrings/kubernetes-archive-keyring.gpg
+        mode: '0755'
+        remote_src: yes
+        owner: ubuntu
+        group: ubuntu
+
+    - name: Add Kubernetes repository into sources list
+      become: true
+      ansible.builtin.apt_repository:
+        repo: "deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] https://apt.kubernetes.io/ kubernetes-xenial main"
+        state: present
+
+    - name: Update repositories cache and install Kubernetes tools
+      become: true
+      block:
+        - name: Install 'kubeadm', 'kubectl', 'kubelet' and 'containerd'
+          block:
+            - name: Install 'kubeadm'
+              ansible.builtin.apt:
+                update_cache: yes
+                allow_downgrade: yes
+                pkg:
+                  - kubeadm={{ kube_version }}
+            - name: Prevent 'kubeadm' from being upgraded
+              ansible.builtin.dpkg_selections:
+                name: kubeadm
+                selection: hold
+
+            - name: Install 'kubectl'
+              ansible.builtin.apt:
+                update_cache: yes
+                allow_downgrade: yes
+                pkg:
+                  - kubectl={{ kube_version }}
+            - name: Prevent 'kubectl' from being upgraded
+              ansible.builtin.dpkg_selections:
+                name: kubectl
+                selection: hold
+
+            - name: Install 'kubelet'
+              ansible.builtin.apt:
+                update_cache: yes
+                allow_downgrade: yes
+                pkg:
+                  - kubelet={{ kube_version }}
+            - name: Prevent 'kubelet' from being upgraded
+              ansible.builtin.dpkg_selections:
+                name: kubelet
+                selection: hold
+
+            - name: Install 'containerd'
+              ansible.builtin.apt:
+                pkg:
+                  - containerd
+    - name: Modify '/etc/sysctl.conf'
+      become: true
+      block:
+        - name: Enable module 'br_netfilter'
+          ansible.builtin.command: modprobe br_netfilter
+
+        - name: Enable forwarding in sysctl.conf
+          ansible.builtin.lineinfile:
+            path: /etc/sysctl.conf
+            line: net.ipv4.ip_forward=1
+            owner: root
+            group: root
+            mode: '0644'
+
+        - name: Enable iptables in sysctl.conf
+          ansible.builtin.lineinfile:
+            path: /etc/sysctl.conf
+            line: net.bridge.bridge-nf-call-iptables=1
+            owner: root
+            group: root
+            mode: '0644'
+
+        - name: Enable arptables in sysctl.conf
+          ansible.builtin.lineinfile:
+            path: /etc/sysctl.conf
+            line: net.bridge.bridge-nf-call-arptables=1
+            owner: root
+            group: root
+            mode: '0644'
+
+        - name: Enable ip6tables in sysctl.conf
+          ansible.builtin.lineinfile:
+            path: /etc/sysctl.conf
+            line: net.bridge.bridge-nf-call-ip6tables=1
+            owner: root
+            group: root
+            mode: '0644'
+
+        - name: Apply modified sysctl.conf
+          ansible.builtin.command: sysctl -p /etc/sysctl.conf
+
+    - name: Collect service facts
+      ansible.builtin.service_facts:
+
+    - name: Service statuses
+      ansible.builtin.debug:
+        var: ansible_facts.services["containerd.service"]
+
+- name: Setup Kubernetes Cluster Control Plane
+  hosts: k8n_control_plane
+  tasks:
+    - name: Setup 'kubeadm' environment
+      become: true
+      block:
+        - name: Test initialized 'kubeadm' (by getting token list)
+          ansible.builtin.shell: kubeadm token list
+          register: kubeadm_token_list
+          ignore_errors: yes
+
+        - name: Tokens list
+          when: kubeadm_token_list['failed'] != true
+          ansible.builtin.debug:
+            msg: "{{ kubeadm_token_list.stdout.split('\n') }}"
+
+        - name: Set up 'kubeadm'
+          when: kubeadm_token_list['failed'] == true
+          block:
+            - name: Initialization string for 'kubeadm'
+              ansible.builtin.debug:
+                msg: "kubeadm init --apiserver-advertise-address={{ internal_ip[inventory_hostname] }} --service-cidr={{ service_cidr }} --pod-network-cidr={{ pod_network_cidr }} --apiserver-cert-extra-sans={{ public_ip[inventory_hostname] }}"
+
+            - name: Initialize 'kubeadm'
+              ansible.builtin.command: kubeadm init --apiserver-advertise-address={{ internal_ip[inventory_hostname] }} --service-cidr={{ service_cidr }} --pod-network-cidr={{ pod_network_cidr }} --apiserver-cert-extra-sans={{ public_ip[inventory_hostname] }}
+              register: kubeadm_init
+
+            - name: Cluster join command
+              ansible.builtin.debug:
+                msg: "{{ kubeadm_init.stdout.split('\n') }}"
+
+    - name: Provide permissions on cluster to non-sudo user
+      block:
+        - name: Create a directory if it does not exist
+          ansible.builtin.file:
+            path: /home/ubuntu/.kube
+            state: directory
+            mode: '0700'
+        - name: Copy file with owner and permissions
+          become: true
+          ansible.builtin.copy:
+            src: /etc/kubernetes/admin.conf
+            dest: /home/ubuntu/.kube/
+            remote_src: yes
+            owner: ubuntu
+            group: ubuntu
+            mode: '0644'
+        - name: Rename file 'admin.conf' to 'config'
+          ansible.builtin.command: mv /home/ubuntu/.kube/admin.conf /home/ubuntu/.kube/config
+
+    - name: Install CNI 'Flannel'
+      block:
+        - name: Upload 'Flannel' config to node
+          ansible.builtin.template:
+            src: ./templates/kube-flannel.yaml.j2
+            dest: /tmp/kube-flannel.yaml
+        - name: Apply 'Flannel' plugin for 'kubectl'
+          ansible.builtin.command: kubectl apply -f /tmp/kube-flannel.yaml
+
+    - name: Show available nodes
+      block:
+        - name: Get available nodes
+          ansible.builtin.command: kubectl get nodes
+          register: kubectl_get_nodes
+
+        - name: Available nodes
+          ansible.builtin.debug:
+            msg: "{{ kubectl_get_nodes.stdout.split('\n') }}"
+
+- name: Grant localhost access to cluster
+  hosts: localhost
+  tasks:
+    - name: Create local directory
+      become: false
+      ansible.builtin.file:
+        path: /home/oleg/.kube
+        state: directory
+        mode: '0700'
+
+- name: Grant localhost access to cluster
+  hosts: cp1
+  tasks:
+    - name: Download file './kube/config' from cluster to localhost directory
+      ansible.builtin.fetch:
+        src: /home/ubuntu/.kube/config
+        dest: /home/oleg/.kube/
+        flat: yes
+
+- name: Grant localhost access to cluster
+  hosts: localhost
+  tasks:
+    - name: Replace private IP-address with public one
+      ansible.builtin.replace:
+        path: /home/oleg/.kube/config
+        regexp: >-
+          ^(?P<prefix>.*server:\s*https:\/\/)(\d+\.\d+\.\d+\.\d+)(?P<postfix>:\d*.+)$
+        replace: '\g<prefix>{{ public_ip.cp1 }}\g<postfix>'
+
+    - name: Show available nodes
+      block:
+        - name: Get available nodes
+          ansible.builtin.command: kubectl get nodes
+          register: kubectl_get_nodes
+
+        - name: Available nodes
+          ansible.builtin.debug:
+            msg: "{{ kubectl_get_nodes.stdout.split('\n') }}"
+
+- name: Obtain cluster join command
+  hosts: cp1
+  tasks:
+    - name: Create token
+      become: true
+      ansible.builtin.command: kubeadm token create --print-join-command
+      register: kubeadm_token_create
+
+    - name: Cluster join command
+      ansible.builtin.debug:
+        msg: "{{ kubeadm_token_create.stdout.split('\n') }}"

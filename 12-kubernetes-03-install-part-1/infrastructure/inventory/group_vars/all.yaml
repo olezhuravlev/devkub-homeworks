@@ -1,0 +1,22 @@
+---
+public_ip:
+  cp1: 178.154.201.171
+  node1: 178.154.203.60
+  node2: 178.154.205.23
+
+internal_ip:
+  cp1: 10.128.0.13
+  node1: 10.128.0.20
+  node2: 10.128.0.5
+
+# Specify a network for pods with a minimum size of /16,
+# and it should not be a part of your existing network (specified with Terraform):
+# variable "ipv4_cidr_blocks" {
+#   default = "10.128.0.0/16"
+# }
+# because Flannel uses encapsulation to connect pods on different nodes to one overlay network.
+pod_network_cidr: 10.129.0.0/16
+service_cidr: 10.130.0.0/16
+
+# Version of kubeadm, kubectl and kubelet to use.
+kube_version: 1.24.0-00
