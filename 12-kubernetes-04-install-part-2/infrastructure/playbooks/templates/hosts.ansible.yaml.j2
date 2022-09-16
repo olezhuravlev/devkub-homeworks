@@ -1,0 +1,46 @@
+all:
+  hosts:
+    cp1:
+      ansible_host: {{ internal_ip["cp1"] }}
+      ip: {{ internal_ip["cp1"] }}
+      access_ip: {{ internal_ip["cp1"] }}
+      ansible_user: {{ ansible_user }}
+    node1:
+      ansible_host: {{ internal_ip["node1"] }}
+      ip: {{ internal_ip["node1"] }}
+      access_ip: {{ internal_ip['node1'] }}
+      ansible_user: {{ ansible_user }}
+    node2:
+      ansible_host: {{ internal_ip["node2"] }}
+      ip: {{ internal_ip["node2"] }}
+      access_ip: {{ internal_ip["node2"] }}
+      ansible_user: {{ ansible_user }}
+    node3:
+      ansible_host: {{ internal_ip[ "node3" ] }}
+      ip: {{ internal_ip[ "node3" ] }}
+      access_ip: {{ internal_ip[ "node3" ] }}
+      ansible_user: {{ ansible_user }}
+    node4:
+      ansible_host: {{ internal_ip[ "node4" ] }}
+      ip: {{ internal_ip[ "node4" ] }}
+      access_ip: {{ internal_ip[ "node4" ] }}
+      ansible_user: {{ ansible_user }}
+  children:
+    kube_control_plane:
+      hosts:
+        cp1:
+    kube_node:
+      hosts:
+        node1:
+        node2:
+        node3:
+        node4:
+    etcd:
+      hosts:
+        cp1:
+    k8s_cluster:
+      children:
+        kube_control_plane:
+        kube_node:
+    calico_rr:
+      hosts: {}

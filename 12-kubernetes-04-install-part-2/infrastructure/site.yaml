@@ -1,0 +1,4 @@
+---
+- import_playbook: playbooks/setup.ansible.yaml
+- import_playbook: playbooks/mount-cluster.ansible.yaml
+- import_playbook: playbooks/grant-permissions.ansible.yaml

@@ -1,0 +1,25 @@
+---
+public_ip:
+  cp1: 51.250.87.112
+
+internal_ip:
+  cp1: 10.128.10.1
+  node1: 10.128.20.1
+  node2: 10.128.20.2
+  node3: 10.128.20.3
+  node4: 10.128.20.4
+
+# NOW NETWORK PREFERENCES ARE IN file `k8s-cluster.yml`!
+# kube_service_addresses: 10.130.0.0/16
+# kube_pods_subnet: 10.129.0.0/16
+# supplementary_addresses_in_ssl_keys: [51.250.87.112]
+# Network for pods should not be a part of your existing network because network plugin
+#  uses encapsulation to connect pods on different nodes to one overlay network!
+
+ansible_user: "ubuntu"
+
+kubespray_gitclone_url: "https://github.com/kubernetes-sigs/kubespray.git"
+kubespray_dir: "/home/ubuntu/kubespray"
+
+cluster_source_dir: "sample"
+cluster_destination_dir: "mycluster"
