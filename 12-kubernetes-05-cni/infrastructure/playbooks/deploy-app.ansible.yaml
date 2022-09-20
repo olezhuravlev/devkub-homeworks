@@ -1,0 +1,12 @@
+---
+- name: Setup Kubernetes Cluster
+  hosts: k8n_control_plane
+  tasks:
+    - name: Deploy 'hello-world' web-application
+      block:
+      - name: Upload deployment manifest for 'hello-world'
+        ansible.builtin.template:
+          src: ./templates/deployment.yaml
+          dest: "/home/ubuntu/deployment.yaml"
+      - name: Apply manifest for 'hello-world'
+        ansible.builtin.command: kubectl apply -f /home/ubuntu/deployment.yaml
