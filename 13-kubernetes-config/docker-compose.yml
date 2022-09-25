@@ -19,3 +19,10 @@ services:
       POSTGRES_PASSWORD: postgres
       POSTGRES_USER: postgres
       POSTGRES_DB: news
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: olezhuravlev@gmail.com
+      PGADMIN_DEFAULT_PASSWORD: admin
