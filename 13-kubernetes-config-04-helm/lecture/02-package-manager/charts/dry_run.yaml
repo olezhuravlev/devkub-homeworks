@@ -1,0 +1,292 @@
+NAME: someReleaseName
+LAST DEPLOYED: Sat Oct  8 08:25:39 2022
+NAMESPACE: default
+STATUS: pending-install
+REVISION: 1
+USER-SUPPLIED VALUES:
+persistence:
+  accessModes:
+  - ReadWriteOnce
+  enabled: true
+  size: 50Mi
+  storageClass: standard
+someVariable: someValue
+
+COMPUTED VALUES:
+additionalPeers: []
+affinity: {}
+command: []
+config:
+  global: {}
+  receivers:
+  - name: default-receiver
+  route:
+    group_interval: 5m
+    group_wait: 10s
+    receiver: default-receiver
+    repeat_interval: 3h
+  templates:
+  - /etc/alertmanager/*.tmpl
+configmapReload:
+  enabled: false
+  image:
+    pullPolicy: IfNotPresent
+    repository: jimmidyson/configmap-reload
+    tag: v0.5.0
+  name: configmap-reload
+  resources: {}
+dnsConfig: {}
+extraArgs: {}
+extraSecretMounts: []
+fullnameOverride: ""
+image:
+  pullPolicy: IfNotPresent
+  repository: quay.io/prometheus/alertmanager
+  tag: ""
+imagePullSecrets: []
+ingress:
+  annotations: {}
+  className: ""
+  enabled: false
+  hosts:
+  - host: alertmanager.domain.com
+    paths:
+    - path: /
+      pathType: ImplementationSpecific
+  tls: []
+livenessProbe:
+  httpGet:
+    path: /
+    port: http
+nameOverride: ""
+nodeSelector: {}
+persistence:
+  accessModes:
+  - ReadWriteOnce
+  enabled: true
+  size: 50Mi
+  storageClass: standard
+podAnnotations: {}
+podAntiAffinity: ""
+podAntiAffinityTopologyKey: kubernetes.io/hostname
+podDisruptionBudget: {}
+podLabels: {}
+podSecurityContext:
+  fsGroup: 65534
+readinessProbe:
+  httpGet:
+    path: /
+    port: http
+replicaCount: 1
+resources: {}
+securityContext:
+  runAsGroup: 65534
+  runAsNonRoot: true
+  runAsUser: 65534
+service:
+  annotations: {}
+  clusterPort: 9094
+  loadBalancerIP: ""
+  loadBalancerSourceRanges: []
+  port: 9093
+  type: ClusterIP
+serviceAccount:
+  annotations: {}
+  create: true
+  name: null
+someVariable: someValue
+statefulSet:
+  annotations: {}
+templates: {}
+tolerations: []
+topologySpreadConstraints: []
+
+HOOKS:
+---
+# Source: alertmanager/templates/tests/test-connection.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: "someReleaseName-alertmanager-test-connection"
+  labels:
+    helm.sh/chart: alertmanager-0.21.0
+    app.kubernetes.io/name: alertmanager
+    app.kubernetes.io/instance: someReleaseName
+    app.kubernetes.io/version: "v0.23.0"
+    app.kubernetes.io/managed-by: Helm
+  annotations:
+    "helm.sh/hook": test-success
+spec:
+  containers:
+    - name: wget
+      image: busybox
+      command: ['wget']
+      args: ['someReleaseName-alertmanager:9093']
+  restartPolicy: Never
+MANIFEST:
+---
+# Source: alertmanager/templates/serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: someReleaseName-alertmanager
+  labels:
+    helm.sh/chart: alertmanager-0.21.0
+    app.kubernetes.io/name: alertmanager
+    app.kubernetes.io/instance: someReleaseName
+    app.kubernetes.io/version: "v0.23.0"
+    app.kubernetes.io/managed-by: Helm
+---
+# Source: alertmanager/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: someReleaseName-alertmanager
+  labels:
+    helm.sh/chart: alertmanager-0.21.0
+    app.kubernetes.io/name: alertmanager
+    app.kubernetes.io/instance: someReleaseName
+    app.kubernetes.io/version: "v0.23.0"
+    app.kubernetes.io/managed-by: Helm
+data:
+  alertmanager.yml: |
+    global: {}
+    receivers:
+    - name: default-receiver
+    route:
+      group_interval: 5m
+      group_wait: 10s
+      receiver: default-receiver
+      repeat_interval: 3h
+    templates:
+    - /etc/alertmanager/*.tmpl
+---
+# Source: alertmanager/templates/services.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: someReleaseName-alertmanager
+  labels:
+    helm.sh/chart: alertmanager-0.21.0
+    app.kubernetes.io/name: alertmanager
+    app.kubernetes.io/instance: someReleaseName
+    app.kubernetes.io/version: "v0.23.0"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  type: ClusterIP
+  ports:
+    - port: 9093
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    app.kubernetes.io/name: alertmanager
+    app.kubernetes.io/instance: someReleaseName
+---
+# Source: alertmanager/templates/services.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: someReleaseName-alertmanager-headless
+  labels:
+    helm.sh/chart: alertmanager-0.21.0
+    app.kubernetes.io/name: alertmanager
+    app.kubernetes.io/instance: someReleaseName
+    app.kubernetes.io/version: "v0.23.0"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  clusterIP: None
+  ports:
+    - port: 9093
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    app.kubernetes.io/name: alertmanager
+    app.kubernetes.io/instance: someReleaseName
+---
+# Source: alertmanager/templates/statefulset.yaml
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: someReleaseName-alertmanager
+  labels:
+    helm.sh/chart: alertmanager-0.21.0
+    app.kubernetes.io/name: alertmanager
+    app.kubernetes.io/instance: someReleaseName
+    app.kubernetes.io/version: "v0.23.0"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: alertmanager
+      app.kubernetes.io/instance: someReleaseName
+  serviceName: someReleaseName-alertmanager-headless
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: alertmanager
+        app.kubernetes.io/instance: someReleaseName
+      annotations:
+        checksum/config: eddc24fc9c760b5e09f0304f9bb180e3eb84c6d04b77a8dcc6cfda962afee3ab
+    spec:
+      serviceAccountName: someReleaseName-alertmanager
+      securityContext:
+        fsGroup: 65534
+      containers:
+        - name: alertmanager
+          securityContext:
+            runAsGroup: 65534
+            runAsNonRoot: true
+            runAsUser: 65534
+          image: "quay.io/prometheus/alertmanager:v0.23.0"
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: status.podIP
+          args:
+            - --storage.path=/alertmanager
+            - --config.file=/etc/alertmanager/alertmanager.yml
+          ports:
+            - name: http
+              containerPort: 9093
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+          resources:
+            {}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/alertmanager
+            - name: storage
+              mountPath: /alertmanager
+      volumes:
+        - name: config
+          configMap:
+            name: someReleaseName-alertmanager
+  volumeClaimTemplates:
+    - metadata:
+        name: storage
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 50Mi
+        storageClassName: standard
+
+NOTES:
+1. Get the application URL by running these commands:
+  export POD_NAME=$(kubectl get pods --namespace default -l "app.kubernetes.io/name=alertmanager,app.kubernetes.io/instance=someReleaseName" -o jsonpath="{.items[0].metadata.name}")
+  echo "Visit http://127.0.0.1:9093 to use your application"
+  kubectl --namespace default port-forward $POD_NAME 9093:80

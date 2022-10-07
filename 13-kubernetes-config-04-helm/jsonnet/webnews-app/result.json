@@ -1,0 +1,298 @@
+{
+   "apiVersion": "v1",
+   "items": [
+      {
+         "apiVersion": "v1",
+         "kind": "PersistentVolume",
+         "metadata": {
+            "annotations": {
+               "meta.helm.sh/release-name": "webapp",
+               "meta.helm.sh/release-namespace": "app1"
+            },
+            "labels": {
+               "app": "web-news",
+               "component": "dbase"
+            },
+            "name": "persistent-volume-1gb"
+         },
+         "spec": {
+            "accessModes": [
+               "ReadWriteOnce"
+            ],
+            "capacity": {
+               "storage": "1Gi"
+            },
+            "hostPath": {
+               "path": "/persistentVolume1gb"
+            },
+            "persistentVolumeReclaimPolicy": "Retain"
+         }
+      },
+      {
+         "apiVersion": "v1",
+         "kind": "Service",
+         "metadata": {
+            "labels": {
+               "app": "web-news",
+               "component": "backend"
+            },
+            "name": "backend-nodeport-svc",
+            "namespace": "app1"
+         },
+         "spec": {
+            "ports": [
+               {
+                  "name": "backend-nodeport",
+                  "nodePort": 30001,
+                  "port": 9000,
+                  "protocol": "TCP",
+                  "targetPort": "backend-port"
+               }
+            ],
+            "selector": {
+               "app": "web-news",
+               "component": "backend"
+            },
+            "type": "NodePort"
+         }
+      },
+      {
+         "apiVersion": "v1",
+         "kind": "Service",
+         "metadata": {
+            "labels": {
+               "app": "web-news",
+               "component": "frontend"
+            },
+            "name": "frontend-nodeport-svc",
+            "namespace": "app1"
+         },
+         "spec": {
+            "ports": [
+               {
+                  "name": "frontend-nodeport",
+                  "nodePort": 30000,
+                  "port": 80,
+                  "protocol": "TCP",
+                  "targetPort": "frontend-port"
+               }
+            ],
+            "selector": {
+               "app": "web-news",
+               "component": "frontend"
+            },
+            "type": "NodePort"
+         }
+      },
+      {
+         "apiVersion": "v1",
+         "kind": "Service",
+         "metadata": {
+            "labels": {
+               "app": "web-news",
+               "component": "dbase"
+            },
+            "name": "db",
+            "namespace": "app1"
+         },
+         "spec": {
+            "ports": [
+               {
+                  "name": "postgres-nodeport",
+                  "nodePort": 30002,
+                  "port": 5432,
+                  "protocol": "TCP",
+                  "targetPort": "postgres-port"
+               }
+            ],
+            "selector": {
+               "app": "web-news",
+               "component": "dbase"
+            },
+            "type": "NodePort"
+         }
+      },
+      {
+         "apiVersion": "apps/v1",
+         "kind": "Deployment",
+         "metadata": {
+            "labels": {
+               "app": "web-news",
+               "component": "frontend"
+            },
+            "name": "frontend",
+            "namespace": "app1"
+         },
+         "spec": {
+            "replicas": 2,
+            "selector": {
+               "matchLabels": {
+                  "app": "web-news",
+                  "component": "frontend"
+               }
+            },
+            "template": {
+               "metadata": {
+                  "labels": {
+                     "app": "web-news",
+                     "component": "frontend"
+                  }
+               },
+               "spec": {
+                  "containers": [
+                     {
+                        "image": "olezhuravlev/frontend:1.1.2",
+                        "name": "frontend",
+                        "ports": [
+                           {
+                              "containerPort": 80,
+                              "name": "frontend-port",
+                              "protocol": "TCP"
+                           }
+                        ]
+                     }
+                  ]
+               }
+            }
+         }
+      },
+      {
+         "apiVersion": "apps/v1",
+         "kind": "Deployment",
+         "metadata": {
+            "labels": {
+               "app": "web-news",
+               "component": "backend"
+            },
+            "name": "backend",
+            "namespace": "app1"
+         },
+         "spec": {
+            "replicas": 2,
+            "selector": {
+               "matchLabels": {
+                  "app": "web-news",
+                  "component": "backend"
+               }
+            },
+            "template": {
+               "metadata": {
+                  "labels": {
+                     "app": "web-news",
+                     "component": "backend"
+                  }
+               },
+               "spec": {
+                  "containers": [
+                     {
+                        "image": "olezhuravlev/backend:1.0.0",
+                        "name": "backend",
+                        "ports": [
+                           {
+                              "containerPort": 9000,
+                              "name": "backend-port",
+                              "protocol": "TCP"
+                           }
+                        ]
+                     }
+                  ]
+               }
+            }
+         }
+      },
+      {
+         "apiVersion": "apps/v1",
+         "kind": "StatefulSet",
+         "metadata": {
+            "labels": {
+               "app": "web-news",
+               "component": "dbase"
+            },
+            "name": "postgres-sts",
+            "namespace": "app1"
+         },
+         "spec": {
+            "replicas": 1,
+            "selector": {
+               "matchLabels": {
+                  "app": "web-news",
+                  "component": "dbase"
+               }
+            },
+            "serviceName": "postgres-svc",
+            "template": {
+               "metadata": {
+                  "labels": {
+                     "app": "web-news",
+                     "component": "dbase"
+                  }
+               },
+               "spec": {
+                  "containers": [
+                     {
+                        "env": [
+                           {
+                              "name": "POSTGRES_PASSWORD",
+                              "value": "postgres"
+                           },
+                           {
+                              "name": "POSTGRES_USER",
+                              "value": "postgres"
+                           },
+                           {
+                              "name": "POSTGRES_DB",
+                              "value": "news"
+                           },
+                           {
+                              "name": "PGDATA",
+                              "value": "/postgresVolume/data"
+                           }
+                        ],
+                        "image": "postgres:13-alpine",
+                        "name": "postgres",
+                        "ports": [
+                           {
+                              "containerPort": 5432,
+                              "name": "postgres-port",
+                              "protocol": "TCP"
+                           }
+                        ],
+                        "volumeMounts": [
+                           {
+                              "mountPath": "/postgresVolume",
+                              "name": "postgres-volume"
+                           }
+                        ]
+                     }
+                  ]
+               }
+            },
+            "volumeClaimTemplates": [
+               {
+                  "metadata": {
+                     "labels": {
+                        "component": "dbase"
+                     },
+                     "name": "postgres-volume"
+                  },
+                  "spec": {
+                     "accessModes": [
+                        "ReadWriteOnce"
+                     ],
+                     "resources": {
+                        "requests": {
+                           "storage": "1Gi"
+                        }
+                     }
+                  }
+               }
+            ]
+         }
+      }
+   ],
+   "kind": "List",
+   "metadata": {
+      "resourceVersion": ""
+   },
+   "namespace": "app1"
+}

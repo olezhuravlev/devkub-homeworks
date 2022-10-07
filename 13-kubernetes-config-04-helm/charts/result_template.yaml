@@ -1,0 +1,212 @@
+---
+# Source: webnews-app/templates/pv-rwo-1gi.yaml
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: persistent-volume-1gb
+  # namespace: default # Doesn't make sense?
+  labels:
+    app: web-news
+    component: dbase
+  annotations:
+    meta.helm.sh/release-name: RELEASE-NAME
+    meta.helm.sh/release-namespace: default
+spec:
+  accessModes:
+    - ReadWriteOnce
+  capacity:
+    storage: 1Gi
+  hostPath:
+    path: /persistentVolume1gb
+  persistentVolumeReclaimPolicy: Retain
+---
+# Source: webnews-app/templates/deploy-backend.yaml
+# NodePort: Exposes the Service on each Node's IP at a static port.
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-nodeport-svc
+  namespace: default
+  labels:
+    app: web-news
+    component: backend
+spec:
+  type: NodePort
+  selector:
+    app: web-news
+    component: backend
+  ports:
+  - name: backend-nodeport
+    protocol: TCP
+    nodePort: 30001 # Port to apply from outside (to see ips - 'kubectl get nodes -o wide').
+    port: 9000 # Port to apply from inside (to see ips - 'kubectl get svc').
+    targetPort: backend-port # Port to map acces to (to see ips - 'kubectl get pods -o wide')
+---
+# Source: webnews-app/templates/deploy-frontend.yaml
+# NodePort: Exposes the Service on each Node's IP at a static port.
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend-nodeport-svc
+  namespace: default
+  labels:
+    app: web-news
+    component: frontend
+spec:
+  type: NodePort
+  selector:
+    app: web-news
+    component: frontend
+  ports:
+  - name: frontend-nodeport
+    protocol: TCP
+    nodePort: 30000 # Port to apply from outside (to see ips - 'kubectl get nodes -o wide').
+    port: 80 # Port to apply from inside (to see ips - 'kubectl get svc').
+    targetPort: frontend-port # Port to map acces to (to see ips - 'kubectl get pods -o wide')
+---
+# Source: webnews-app/templates/sts-pg.yaml
+# NodePort: Exposes the Service on each Node's IP at a static port.
+apiVersion: v1
+kind: Service
+metadata:
+  name: db
+  namespace: default
+  labels:
+    app: web-news
+    component: dbase
+spec:
+  type: NodePort
+  selector:
+    app: web-news
+    component: dbase
+  ports:
+  - name: postgres-nodeport
+    protocol: TCP
+    nodePort: 30002 # Port to apply from outside (to see ips - 'kubectl get nodes -o wide').
+    port: 5432 # Port to apply from inside (to see ips - 'kubectl get svc').
+    targetPort: postgres-port # Port to map acces to (to see ips - 'kubectl get pods -o wide')
+---
+# Source: webnews-app/templates/deploy-backend.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: default
+  labels:
+    app: web-news
+    component: backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: web-news
+      component: backend
+  template:
+    metadata:
+      labels:
+        app: web-news
+        component: backend
+    spec:
+      containers:
+      - name: backend
+        image: olezhuravlev/backend:1.0.0
+        ports:
+        - name: backend-port
+          containerPort: 9000
+          protocol: TCP
+---
+# Source: webnews-app/templates/deploy-frontend.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: default
+  labels:
+    app: web-news
+    component: frontend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: web-news
+      component: frontend
+  template:
+    metadata:
+      labels:
+        app: web-news
+        component: frontend
+    spec:
+      containers:
+      - name: frontend
+        image: "olezhuravlev/frontend:1.1.2"
+        ports:
+        - name: frontend-port
+          containerPort: 80
+          protocol: TCP
+---
+# Source: webnews-app/templates/sts-pg.yaml
+# PostgreSQL StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres-sts
+  namespace: default
+  labels:
+    app: web-news
+    component: dbase
+spec:
+  serviceName: postgres-svc
+  replicas: 1
+  selector:
+    matchLabels:
+      app: web-news
+      component: dbase
+  template:
+    metadata:
+      labels:
+        app: web-news
+        component: dbase
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:13-alpine
+        volumeMounts:
+          - name: postgres-volume
+            mountPath: /postgresVolume
+        ports:
+          - name: postgres-port
+            containerPort: 5432
+            protocol: TCP
+        env:
+          - name: POSTGRES_PASSWORD
+            value: postgres
+          - name: POSTGRES_USER
+            value: postgres
+          - name: POSTGRES_DB
+            value: news
+          - name: PGDATA
+            value: /postgresVolume/data
+  # Volume Claim
+  volumeClaimTemplates:
+  - metadata:
+      name: postgres-volume
+      # namespace: default # Doesn't make sense?
+      labels:
+        component: dbase
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      resources:
+        requests:
+          storage: 1Gi
+---
+# Source: webnews-app/templates/ns.yaml
+# ---
+# apiVersion: v1
+# kind: Namespace
+# metadata:
+#   name: app1
+# ---
+# apiVersion: v1
+# kind: Namespace
+# metadata:
+#   name: app2

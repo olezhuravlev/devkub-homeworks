@@ -1,0 +1,181 @@
+---
+# Source: alertmanager/templates/serviceaccount.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: RELEASE-NAME-alertmanager
+  labels:
+    helm.sh/chart: alertmanager-0.21.0
+    app.kubernetes.io/name: alertmanager
+    app.kubernetes.io/instance: RELEASE-NAME
+    app.kubernetes.io/version: "v0.23.0"
+    app.kubernetes.io/managed-by: Helm
+---
+# Source: alertmanager/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: RELEASE-NAME-alertmanager
+  labels:
+    helm.sh/chart: alertmanager-0.21.0
+    app.kubernetes.io/name: alertmanager
+    app.kubernetes.io/instance: RELEASE-NAME
+    app.kubernetes.io/version: "v0.23.0"
+    app.kubernetes.io/managed-by: Helm
+data:
+  alertmanager.yml: |
+    global: {}
+    receivers:
+    - name: default-receiver
+    route:
+      group_interval: 5m
+      group_wait: 10s
+      receiver: default-receiver
+      repeat_interval: 3h
+    templates:
+    - /etc/alertmanager/*.tmpl
+---
+# Source: alertmanager/templates/services.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: RELEASE-NAME-alertmanager
+  labels:
+    helm.sh/chart: alertmanager-0.21.0
+    app.kubernetes.io/name: alertmanager
+    app.kubernetes.io/instance: RELEASE-NAME
+    app.kubernetes.io/version: "v0.23.0"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  type: ClusterIP
+  ports:
+    - port: 9093
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    app.kubernetes.io/name: alertmanager
+    app.kubernetes.io/instance: RELEASE-NAME
+---
+# Source: alertmanager/templates/services.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: RELEASE-NAME-alertmanager-headless
+  labels:
+    helm.sh/chart: alertmanager-0.21.0
+    app.kubernetes.io/name: alertmanager
+    app.kubernetes.io/instance: RELEASE-NAME
+    app.kubernetes.io/version: "v0.23.0"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  clusterIP: None
+  ports:
+    - port: 9093
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    app.kubernetes.io/name: alertmanager
+    app.kubernetes.io/instance: RELEASE-NAME
+---
+# Source: alertmanager/templates/statefulset.yaml
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: RELEASE-NAME-alertmanager
+  labels:
+    helm.sh/chart: alertmanager-0.21.0
+    app.kubernetes.io/name: alertmanager
+    app.kubernetes.io/instance: RELEASE-NAME
+    app.kubernetes.io/version: "v0.23.0"
+    app.kubernetes.io/managed-by: Helm
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: alertmanager
+      app.kubernetes.io/instance: RELEASE-NAME
+  serviceName: RELEASE-NAME-alertmanager-headless
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: alertmanager
+        app.kubernetes.io/instance: RELEASE-NAME
+      annotations:
+        checksum/config: ba793e296061d687d22306dc76c9ae611a77018c4f93992688f298399226f1fd
+    spec:
+      serviceAccountName: RELEASE-NAME-alertmanager
+      securityContext:
+        fsGroup: 65534
+      containers:
+        - name: alertmanager
+          securityContext:
+            runAsGroup: 65534
+            runAsNonRoot: true
+            runAsUser: 65534
+          image: "quay.io/prometheus/alertmanager:v0.23.0"
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: status.podIP
+          args:
+            - --storage.path=/alertmanager
+            - --config.file=/etc/alertmanager/alertmanager.yml
+          ports:
+            - name: http
+              containerPort: 9093
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+          resources:
+            {}
+          volumeMounts:
+            - name: config
+              mountPath: /etc/alertmanager
+            - name: storage
+              mountPath: /alertmanager
+      volumes:
+        - name: config
+          configMap:
+            name: RELEASE-NAME-alertmanager
+  volumeClaimTemplates:
+    - metadata:
+        name: storage
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 50Mi
+        storageClassName: standard
+---
+# Source: alertmanager/templates/tests/test-connection.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: "RELEASE-NAME-alertmanager-test-connection"
+  labels:
+    helm.sh/chart: alertmanager-0.21.0
+    app.kubernetes.io/name: alertmanager
+    app.kubernetes.io/instance: RELEASE-NAME
+    app.kubernetes.io/version: "v0.23.0"
+    app.kubernetes.io/managed-by: Helm
+  annotations:
+    "helm.sh/hook": test-success
+spec:
+  containers:
+    - name: wget
+      image: busybox
+      command: ['wget']
+      args: ['RELEASE-NAME-alertmanager:9093']
+  restartPolicy: Never

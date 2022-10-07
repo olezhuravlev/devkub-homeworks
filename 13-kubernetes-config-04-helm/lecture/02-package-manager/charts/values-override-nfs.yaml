@@ -1,0 +1,6 @@
+persistence:
+  enabled: true
+  storageClass: nfs
+  accessModes:
+    - ReadWriteOnce
+  size: 50Mi
