@@ -1,0 +1,20 @@
+apiVersion: qbec.io/v1alpha1
+kind: App
+metadata:
+  name: test-app
+spec:
+  environments:
+    default:
+      defaultNamespace: default
+      server: https://51.250.0.216:6443
+    stage:
+      defaultNamespace: default
+      server: https://51.250.0.216:6443
+    prod:
+      defaultNamespace: default
+      server: https://51.250.0.216:6443
+      includes:
+        - ep
+  vars: {}
+  excludes:
+    - ep
